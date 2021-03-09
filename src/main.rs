@@ -1,21 +1,16 @@
-extern crate aws_lambda_events;
-extern crate image;
 #[macro_use]
 extern crate lambda_runtime as lambda;
 #[macro_use]
 extern crate log;
-extern crate rayon;
-extern crate s3;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
-extern crate simple_logger;
 
-use image::{ImageOutputFormat, GenericImageView, ImageError};
+use simple_logger::SimpleLogger;
 
-use rayon::prelude::*;
+use image::{ImageOutputFormat, ImageError};
+
 use s3::bucket::Bucket;
-use s3::credentials::Credentials;
+use s3::creds::Credentials;
 use s3::region::Region;
 
 mod config;
@@ -26,19 +21,19 @@ use lambda::error::HandlerError;
 use serde_json::Value;
 use std::error::Error;
 
-fn main() -> Result<(), Box<Error>> {
-    simple_logger::init_with_level(log::Level::Info)?;
+fn main() -> Result<(), Box<dyn Error>> {
+    SimpleLogger::new().init().unwrap();
 
     lambda!(handle_event);
 
     Ok(())
 }
 
-fn handle_event(event: Value, ctx: lambda::Context) -> Result<(), HandlerError> {
+fn handle_event(event: Value, _ctx: lambda::Context) -> Result<(), HandlerError> {
     let config = Config::new();
 
     let s3_event: S3Event =
-        serde_json::from_value(event).map_err(|e| ctx.new_error(e.to_string().as_str()))?;
+        serde_json::from_value(event)?;
 
     for record in s3_event.records {
         handle_record(&config, record);
@@ -47,7 +42,7 @@ fn handle_event(event: Value, ctx: lambda::Context) -> Result<(), HandlerError> 
 }
 
 fn handle_record(config: &Config, record: S3EventRecord) {
-    let credentials = Credentials::default();
+    let credentials = Credentials::default().expect("Could not retrieve default credentials");
     let region: Region = record
         .aws_region
         .expect("Could not get region from record")
@@ -61,7 +56,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
             .expect("Could not get bucket name from record"),
         region,
         credentials,
-    );
+    ).expect("Could not get bucket");
     let source = record
         .s3
         .object
@@ -70,55 +65,47 @@ fn handle_record(config: &Config, record: S3EventRecord) {
     info!("Fetching: {}, config: {:?}", &source, &config);
 
     /* Make sure we don't process files twice */
+    let source_path_parts: Vec<&str> = source.split("/").collect();
+    if &"originals" != source_path_parts.last().unwrap() {
+        warn!("Source: '{}' not in originals, skipping.", &source);
+        return;
+    }
     for size in &config.sizes {
-        let to_match = format!("-{}.jpg", size);
-        if source.ends_with(&to_match) {
-            warn!(
-                "Source: '{}' ends with: '{}'. Skipping.",
-                &source,
-                &to_match
-            );
-            return;
+        if "originals" == size.0 {
+            panic!("'originals' is not a valid target folder");
         }
     }
 
     let (data, _) = bucket
-        .get(&source)
+        .get_object_blocking(&source)
         .expect(&format!("Could not get object: {}", &source));
 
     let img = image::load_from_memory(&data)
         .ok()
         .expect("Opening image failed");
 
+    let mut dest_path_parts = source_path_parts.clone();
     let _: Vec<_> = config
         .sizes
-        .par_iter()
+        .iter()
         .map(|size| {
-            let buffer = resize_image(&img, &size).expect("Could not resize image");
-
-            let mut target = source.clone();
-            for (rep_key, rep_val) in &config.replacements {
-                target = target.replace(rep_key, rep_val);
-            }
-            target = target.replace(".jpg", &format!("-{}.jpg", size));
+            let buffer = resize_image(&img, &(size.1, size.2)).expect("Could not resize image");
+            dest_path_parts.pop();
+            dest_path_parts.push(&size.0);
+            
+            let dest = dest_path_parts.join("/");
             let (_, code) = bucket
-                .put(&target, &buffer, "image/jpeg")
-                .expect(&format!("Could not upload object to :{}", &target));
-            info!("Uploaded: {} with: {}", &target, &code);
+                .put_object_with_content_type_blocking(&dest, &buffer, "image/jpeg")
+                .expect(&format!("Could not upload object to :{}", &dest));
+            info!("Uploaded: {} with: {}", &dest, &code);
         })
         .collect();
 }
 
-fn resize_image(img: &image::DynamicImage, new_w: &f32) -> Result<Vec<u8>, ImageError> {
+fn resize_image(img: &image::DynamicImage, (new_w, new_h): &(u32, u32)) -> Result<Vec<u8>, ImageError> {
     let mut result: Vec<u8> = Vec::new();
-
-    let old_w = img.width() as f32;
-    let old_h = img.height() as f32;
-    let ratio = new_w / old_w;
-    let new_h = (old_h * ratio).floor();
-
-    let scaled = img.resize(*new_w as u32, new_h as u32, image::FilterType::Lanczos3);
-    scaled.write_to(&mut result, ImageOutputFormat::JPEG(90))?;
+    let scaled = img.resize(*new_w, *new_h, image::imageops::FilterType::Lanczos3);
+    scaled.write_to(&mut result, ImageOutputFormat::Png)?;
 
     Ok(result)
 }

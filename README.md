@@ -6,10 +6,9 @@ This binary responds to Amazon S3 events and triggers a resize on the uploaded i
 
 ## Configure
 
-This binary relies on two env vars:
+This binary relies on one env var:
 
-* `SIZES`, an array if sizes (`export SIZES=200,300,400`)
-* `REPLACEMENTS`, an array of replacements for the path (`export REPLACEMENTS="original:resized"`)
+* `SIZES`, a sequence of comma-separated FOLDER:WIDTHxHEIGHT targets, e.g. (`SIZES=@1x:200x300,@2x:300x400`)
 
 ## Compile
 
