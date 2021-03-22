@@ -5,20 +5,25 @@ use std::io::Write;
 
 fn main() {
     let matches = App::new("resize")
-        .arg(Arg::with_name("INPUT").required(true))
-        .arg(Arg::with_name("OUTPUT").required(true))
-        .arg(Arg::with_name("WIDTH").required(true))
-        .arg(Arg::with_name("HEIGHT").required(true))
+        .arg(Arg::with_name("INPUT").required(true).index(1))
+        .arg(Arg::with_name("OUTPUT").required(true).index(2))
+        .arg(Arg::with_name("WIDTH").required(true).short("w").takes_value(true))
+        .arg(Arg::with_name("HEIGHT").required(true).short("h").takes_value(true))
         .get_matches();
 
     let file_in = matches.value_of("INPUT").unwrap();
     let file_out = matches.value_of("OUTPUT").unwrap();
 
-    let mut img = image::open(file_in).unwrap();
-    let data = resize_image(
-        &mut img,
-        &(matches.value_of("WIDTH").unwrap().parse().unwrap(), matches.value_of("HEIGHT").unwrap().parse().unwrap()))
+    let reader = image::io::Reader::open(file_in)
+        .unwrap()
+        .with_guessed_format()
         .unwrap();
-    let mut file = File::create(file_out).unwrap();
-    file.write_all(&data).unwrap();
+    let format = reader.format().unwrap();
+
+    let mut img = reader.decode().unwrap();
+    let resized = resize_image(
+        &mut img,
+        &(matches.value_of("WIDTH").unwrap().parse().unwrap(), matches.value_of("HEIGHT").unwrap().parse().unwrap()));
+    
+    resized.save_with_format(file_out, format).unwrap();
 }

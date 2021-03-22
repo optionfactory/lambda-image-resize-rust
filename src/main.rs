@@ -1,21 +1,12 @@
-extern crate lambda_runtime as lambda;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-
-
+use lambda_runtime as lambda;
+use log::{info};
 use std::mem;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
-
-
 use s3::bucket::Bucket;
 use s3::creds::Credentials;
 use s3::region::Region;
-
 mod config;
-
 use aws_lambda_events::event::s3::{S3Event, S3EventRecord};
 use config::Config;
 use lambda::handler_fn;
@@ -74,37 +65,33 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .expect("Could not get key from object record");
     info!("Fetching: {}, config: {:?}", &source, &config);
 
-    /* Make sure we don't process files twice */
-    let source_path_parts: Vec<&str> = source.split("/").collect();
-    let last_folder = source_path_parts[source_path_parts.len()-2];
-    if "originals" != last_folder {
-        warn!("Source: '{}' not in originals, skipping.", &source);
-        return;
-    }
-    for size in &config.sizes {
-        if "originals" == size.0 {
-            panic!("'originals' is not a valid target folder");
-        }
-    }
-
     let (data, _) = bucket
         .get_object_blocking(&source)
         .expect(&format!("Could not get object: {}", &source));
 
-    let mut img = image::load_from_memory(&data)
-        .ok()
+    let reader = image::io::Reader::new(std::io::Cursor::new(data))
+        .with_guessed_format()
+        .unwrap();
+    let format = reader.format().unwrap();
+    let mut img = reader
+        .decode()
         .expect("Opening image failed");
 
-    let mut dest_path_parts = source_path_parts.clone();
+    let source_path_parts: Vec<&str> = source.split("/").collect();
+    let last_folder_pos = source_path_parts.len() - 2;
+
     let _: Vec<_> = config
         .sizes
         .iter()
         .map(|size| {
-            let buffer = resize_image(&mut img, &(size.1, size.2)).expect("Could not resize image");
-            let last_folder_pos = dest_path_parts.len() - 2;
+            let resized = resize_image(&mut img, &(size.1, size.2));
+            let mut buffer = Vec::new();
+            resized.write_to(&mut buffer, format).unwrap();
+
+            let mut dest_path_parts = source_path_parts.clone();
             let _ = mem::replace(&mut dest_path_parts[last_folder_pos], &size.0);
-            
             let dest = dest_path_parts.join("/");
+
             let (_, code) = bucket
                 .put_object_with_content_type_blocking(&dest, &buffer, "image/jpeg")
                 .expect(&format!("Could not upload object to :{}", &dest));
@@ -118,7 +105,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
 mod tests {
     use super::*;
     #[test]
-    fn it_works() {
+    fn can_parse_eu_south() {
         let credentials = Credentials::anonymous().unwrap();
         let region: Region = Region::Custom { region: "eu-south-1".to_string(), endpoint: "https://s3.eu-south-1.amazonaws.com".to_string() };
         let bucket = Bucket::new(

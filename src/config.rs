@@ -1,33 +1,31 @@
 use std::env;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug)]
 pub struct Config {
+    pub dest_bucket: String,
     pub sizes: Vec<(String, u32,u32)>,
 }
 
 impl Config {
     pub fn new() -> Config {
         Config {
-            sizes: Config::parse_sizes()
+            dest_bucket: env::var("RESIZE_DEST_BUCKET").expect("RESIZE_DEST_BUCKET not set"),
+            sizes: Config::parse_sizes(&env::var("RESIZE_SIZES").expect("RESIZE_SIZES not set")),
         }
     }
 
-    pub fn parse_sizes() -> Vec<(String, u32,u32)> {
-        let mut sizes = Vec::new();
-        if let Ok(sizes_string) = env::var("SIZES") {
-            for size_string in sizes_string.split(',').into_iter() {
+    pub fn parse_sizes(sizes_string: &str) -> Vec<(String, u32,u32)> {
+        sizes_string.split(',').into_iter()
+            .map(|size_string| {
                 let mut parts = size_string.split(":");
                 let folder = parts.next().expect(&sizes_string).to_string();
                 let mut dims = parts.next().unwrap().split('x');
-                let size = (
+                (
                     folder,
                     dims.next().unwrap().parse().unwrap(), 
-                    dims.next().unwrap().parse().unwrap());
-                sizes.push(size);
-            }
-        };
-
-        sizes
+                    dims.next().unwrap().parse().unwrap()
+                )})
+            .collect()
     }
 }
 
@@ -35,8 +33,17 @@ impl Config {
 mod tests {
     use super::*;
     #[test]
-    fn it_works() {
-        env::set_var("SIZES", "@1x:200x300,@2x:300x400");
+    fn can_parse_sizes() {
+        env::set_var("RESIZE_DEST_BUCKET", "mario");
+        env::set_var("RESIZE_SIZES", "@1x:200x300,@2x:300x400");
+        let cfg = Config::new();
+        assert_eq!(2, cfg.sizes.len());
+        assert_eq!(200, (cfg.sizes[0]).1);
+    }
+
+    #[test]
+    fn fails_without_dest_bucket() {
+        env::set_var("RESIZE_SIZES", "@1x:200x300,@2x:300x400");
         let cfg = Config::new();
         assert_eq!(2, cfg.sizes.len());
         assert_eq!(200, (cfg.sizes[0]).1);
