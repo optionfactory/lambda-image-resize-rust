@@ -1,6 +1,5 @@
 use lambda_runtime as lambda;
 use log::{info};
-use std::mem;
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use s3::bucket::Bucket;
@@ -48,12 +47,13 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .aws_region
         .expect("Could not get region from record");
     let region = parse_region(&region_name);
+    let source_bucket_name = &record
+        .s3
+        .bucket
+        .name
+        .expect("Could not get bucket name from record");
     let source_bucket = Bucket::new(
-        &record
-            .s3
-            .bucket
-            .name
-            .expect("Could not get bucket name from record"),
+        source_bucket_name,    
         region,
         Credentials::default().expect("Could not retrieve default credentials"),
     ).expect("Could not source bucket");
@@ -77,9 +77,10 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .expect("Opening image failed");
 
     let source_path_parts: Vec<&str> = source.split("/").collect();
-    let last_folder_pos = source_path_parts.len() - 2;
 
-
+    if  config.dest_bucket == *source_bucket_name {
+        panic!("source and target bucket names are the same. Quitting to avoid an infinite loop.")
+    }
     let dest_region = parse_region(&config.dest_region);
     let dest_bucket = Bucket::new(
         &config.dest_bucket,
@@ -98,7 +99,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
             resized.write_to(&mut buffer, format).unwrap();
 
             let mut dest_path_parts = source_path_parts.clone();
-            let _ = mem::replace(&mut dest_path_parts[last_folder_pos], &size.0);
+            dest_path_parts.insert(dest_path_parts.len() - 1, &size.0);
             let dest = dest_path_parts.join("/");
 
             let (_, code) = dest_bucket
