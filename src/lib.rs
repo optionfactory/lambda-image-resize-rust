@@ -1,5 +1,5 @@
 use std::num::NonZeroU32;
-use image::{ImageOutputFormat, ImageError, DynamicImage};
+use image::{DynamicImage};
 use smartcrop::{Analyzer, CropSettings};
 
 pub fn resize_image(img: &mut image::DynamicImage, (new_w, new_h): &(u32, u32)) -> DynamicImage {

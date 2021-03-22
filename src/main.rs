@@ -44,20 +44,19 @@ fn parse_region(region_name: &str) -> Region {
 }
 
 fn handle_record(config: &Config, record: S3EventRecord) {
-    let credentials = Credentials::default().expect("Could not retrieve default credentials");
     let region_name = record
         .aws_region
         .expect("Could not get region from record");
     let region = parse_region(&region_name);
-    let bucket = Bucket::new(
+    let source_bucket = Bucket::new(
         &record
             .s3
             .bucket
             .name
             .expect("Could not get bucket name from record"),
         region,
-        credentials,
-    ).expect("Could not get bucket");
+        Credentials::default().expect("Could not retrieve default credentials"),
+    ).expect("Could not source bucket");
     let source = record
         .s3
         .object
@@ -65,7 +64,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .expect("Could not get key from object record");
     info!("Fetching: {}, config: {:?}", &source, &config);
 
-    let (data, _) = bucket
+    let (data, _) = source_bucket
         .get_object_blocking(&source)
         .expect(&format!("Could not get object: {}", &source));
 
@@ -80,6 +79,16 @@ fn handle_record(config: &Config, record: S3EventRecord) {
     let source_path_parts: Vec<&str> = source.split("/").collect();
     let last_folder_pos = source_path_parts.len() - 2;
 
+
+    let dest_region = parse_region(&config.dest_region);
+    let dest_bucket = Bucket::new(
+        &config.dest_bucket,
+        dest_region,
+        Credentials::default().expect("Could not retrieve default credentials"),
+    ).expect("Could not dest bucket");
+
+
+
     let _: Vec<_> = config
         .sizes
         .iter()
@@ -92,7 +101,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
             let _ = mem::replace(&mut dest_path_parts[last_folder_pos], &size.0);
             let dest = dest_path_parts.join("/");
 
-            let (_, code) = bucket
+            let (_, code) = dest_bucket
                 .put_object_with_content_type_blocking(&dest, &buffer, "image/jpeg")
                 .expect(&format!("Could not upload object to :{}", &dest));
             info!("Uploaded: {} with code: {}", &dest, &code);

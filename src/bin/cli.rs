@@ -1,7 +1,5 @@
 use lambda_image_resize_rust::resize_image;
 use clap::{App, Arg};
-use std::fs::File;
-use std::io::Write;
 
 fn main() {
     let matches = App::new("resize")

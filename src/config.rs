@@ -2,6 +2,7 @@ use std::env;
 
 #[derive(Debug)]
 pub struct Config {
+    pub dest_region: String,
     pub dest_bucket: String,
     pub sizes: Vec<(String, u32,u32)>,
 }
@@ -9,6 +10,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Config {
         Config {
+            dest_region: env::var("RESIZE_DEST_REGION").expect("RESIZE_DEST_REGION not set"),
             dest_bucket: env::var("RESIZE_DEST_BUCKET").expect("RESIZE_DEST_BUCKET not set"),
             sizes: Config::parse_sizes(&env::var("RESIZE_SIZES").expect("RESIZE_SIZES not set")),
         }
