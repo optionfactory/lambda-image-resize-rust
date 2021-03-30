@@ -102,8 +102,15 @@ fn handle_record(config: &Config, record: S3EventRecord) {
             dest_path_parts.insert(dest_path_parts.len() - 1, &size.0);
             let dest = dest_path_parts.join("/");
 
+            let content_type = match format {
+                image::ImageFormat::Png => "image/png",
+                image::ImageFormat::Jpeg => "image/jpeg",
+                image::ImageFormat::Gif => "image/gif",
+                _ => "application/octet-stream"
+            };
+
             let (_, code) = dest_bucket
-                .put_object_with_content_type_blocking(&dest, &buffer, "image/jpeg")
+                .put_object_with_content_type_blocking(&dest, &buffer, content_type)
                 .expect(&format!("Could not upload object to :{}", &dest));
             info!("Uploaded: {} with code: {}", &dest, &code);
         })
