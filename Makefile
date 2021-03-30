@@ -1,3 +1,5 @@
+test:
+	cargo test -- --test-threads 1
 build:
 	docker run --rm \
 		-v ${PWD}:/code \

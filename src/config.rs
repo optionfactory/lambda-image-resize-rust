@@ -24,6 +24,7 @@ impl Config {
     pub fn parse_sizes<T: FromStr>(sizes_string: &str) -> Vec<(String, T, T)>
         where <T as FromStr>::Err: Debug  {
         sizes_string.split(',').into_iter()
+            .filter(|e| !e.is_empty())
             .map(|size_string| {
                 let mut parts = size_string.split(":");
                 let folder = parts.next().expect(&sizes_string).to_string();
@@ -41,9 +42,20 @@ impl Config {
 mod tests {
     use super::*;
     #[test]
+    fn can_parse_empty_sizes() {
+        env::set_var("RESIZE_DEST_REGION", "eu-south-1");
+        env::set_var("RESIZE_DEST_BUCKET", "mario");
+        env::set_var("RESIZE_SIZES", "");
+        env::set_var("RESIZE_RATIOS", "10x:10x10");
+        let cfg = Config::new();
+        assert_eq!(0, cfg.sizes.len());
+    }
+    #[test]
     fn can_parse_sizes() {
+        env::set_var("RESIZE_DEST_REGION", "eu-south-1");
         env::set_var("RESIZE_DEST_BUCKET", "mario");
         env::set_var("RESIZE_SIZES", "@1x:200x300,@2x:300x400");
+        env::set_var("RESIZE_RATIOS", "10x:10x10");
         let cfg = Config::new();
         assert_eq!(2, cfg.sizes.len());
         assert_eq!(200, (cfg.sizes[0]).1);
@@ -51,7 +63,9 @@ mod tests {
 
     #[test]
     fn fails_without_dest_bucket() {
+        env::set_var("RESIZE_DEST_REGION", "eu-south-1");
         env::set_var("RESIZE_SIZES", "@1x:200x300,@2x:300x400");
+        env::set_var("RESIZE_RATIOS", "10x:10x10");
         let cfg = Config::new();
         assert_eq!(2, cfg.sizes.len());
         assert_eq!(200, (cfg.sizes[0]).1);
