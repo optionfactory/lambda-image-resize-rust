@@ -12,6 +12,9 @@ use lambda::handler_fn;
 use serde_json::Value;
 
 use lambda_image_resize_rust::resize_image;
+use image::GenericImageView;
+use num_rational::Rational32;
+use num_traits::cast::ToPrimitive;
 
 type Error = Box<dyn std::error::Error + Sync + Send + 'static>;
 
@@ -72,7 +75,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .with_guessed_format()
         .unwrap();
     let format = reader.format().unwrap();
-    let mut img = reader
+    let img = reader
         .decode()
         .expect("Opening image failed");
 
@@ -89,32 +92,38 @@ fn handle_record(config: &Config, record: S3EventRecord) {
     ).expect("Could not dest bucket");
 
 
+    let resized_images = config.sizes.iter()
+        .cloned()
+        .chain(config.ratios.iter()
+            .cloned()
+            .map(|(folder, wr, hr)| {
+                let w = (Rational32::from_integer(img.width() as i32) * wr).trunc().to_u32().unwrap();
+                let h = (Rational32::from_integer(img.height() as i32) * hr).trunc().to_u32().unwrap();
+                (folder, w, h)
+            }))
+        .map(|(folder, w, h)| (folder, resize_image(&img, (w, h))));
 
-    let _: Vec<_> = config
-        .sizes
-        .iter()
-        .map(|size| {
-            let resized = resize_image(&mut img, &(size.1, size.2));
-            let mut buffer = Vec::new();
-            resized.write_to(&mut buffer, format).unwrap();
+    for (folder, resized_img) in resized_images {
+        let mut buffer = Vec::new();
+        resized_img.write_to(&mut buffer, format).unwrap();
 
-            let mut dest_path_parts = source_path_parts.clone();
-            dest_path_parts.insert(dest_path_parts.len() - 1, &size.0);
-            let dest = dest_path_parts.join("/");
+        let mut dest_path_parts = source_path_parts.clone();
+        dest_path_parts.insert(dest_path_parts.len() - 1, &folder);
+        let dest = dest_path_parts.join("/");
 
-            let content_type = match format {
-                image::ImageFormat::Png => "image/png",
-                image::ImageFormat::Jpeg => "image/jpeg",
-                image::ImageFormat::Gif => "image/gif",
-                _ => "application/octet-stream"
-            };
+        let content_type = match format {
+            image::ImageFormat::Png => "image/png",
+            image::ImageFormat::Jpeg => "image/jpeg",
+            image::ImageFormat::Gif => "image/gif",
+            _ => "application/octet-stream"
+        };
 
-            let (_, code) = dest_bucket
-                .put_object_with_content_type_blocking(&dest, &buffer, content_type)
-                .expect(&format!("Could not upload object to :{}", &dest));
-            info!("Uploaded: {} with code: {}", &dest, &code);
-        })
-        .collect();
+        let (_, code) = dest_bucket
+            .put_object_with_content_type_blocking(&dest, &buffer, content_type)
+            .expect(&format!("Could not upload object to :{}", &dest));
+        info!("Uploaded: {} with code: {}", &dest, &code);
+    }
+
 }
 
 

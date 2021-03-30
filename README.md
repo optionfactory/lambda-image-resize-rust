@@ -5,6 +5,7 @@ This binary responds to Amazon S3 events and triggers a resize on the uploaded i
 This binary relies on the following env vars:
 
 * `RESIZE_SIZES`, a sequence of comma-separated FOLDER:WIDTHxHEIGHT targets, e.g. (`SIZES=@1x:200x300,@2x:300x400`)
+* `RESIZE_RATIOS`, a sequence of comma-separated FOLDER:WIDTHRATIOxHEIGHTRATIO targets, e.g. (`SIZES=@1x:1/3x1/3,@2x:2x2`
 * `RESIZE_DEST_REGION`, name of target bucket's region (e.g 'eu-south-1')
 * `RESIZE_DEST_BUCKET`, name of target bucket (e.g. 'mybucket')
 

@@ -21,7 +21,7 @@ fn main() {
     let mut img = reader.decode().unwrap();
     let resized = resize_image(
         &mut img,
-        &(matches.value_of("WIDTH").unwrap().parse().unwrap(), matches.value_of("HEIGHT").unwrap().parse().unwrap()));
+        (matches.value_of("WIDTH").unwrap().parse().unwrap(), matches.value_of("HEIGHT").unwrap().parse().unwrap()));
     
     resized.save_with_format(file_out, format).unwrap();
 }

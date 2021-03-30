@@ -1,10 +1,14 @@
 use std::env;
+use std::str::FromStr;
+use std::fmt::Debug;
+use num_rational::Rational32;
 
 #[derive(Debug)]
 pub struct Config {
     pub dest_region: String,
     pub dest_bucket: String,
     pub sizes: Vec<(String, u32,u32)>,
+    pub ratios: Vec<(String, Rational32,Rational32)>,
 }
 
 impl Config {
@@ -13,10 +17,12 @@ impl Config {
             dest_region: env::var("RESIZE_DEST_REGION").expect("RESIZE_DEST_REGION not set"),
             dest_bucket: env::var("RESIZE_DEST_BUCKET").expect("RESIZE_DEST_BUCKET not set"),
             sizes: Config::parse_sizes(&env::var("RESIZE_SIZES").expect("RESIZE_SIZES not set")),
+            ratios: Config::parse_sizes(&env::var("RESIZE_RATIOS").expect("RESIZE_RATIOS not set")),
         }
     }
 
-    pub fn parse_sizes(sizes_string: &str) -> Vec<(String, u32,u32)> {
+    pub fn parse_sizes<T: FromStr>(sizes_string: &str) -> Vec<(String, T, T)>
+        where <T as FromStr>::Err: Debug  {
         sizes_string.split(',').into_iter()
             .map(|size_string| {
                 let mut parts = size_string.split(":");
