@@ -1,3 +1,4 @@
+use std::io::{Seek, SeekFrom};
 use lambda_runtime as lambda;
 use log::{info};
 use log::LevelFilter;
@@ -11,7 +12,7 @@ use config::Config;
 use lambda::handler_fn;
 use serde_json::Value;
 
-use lambda_image_resize_rust::resize_image;
+use lambda_image_resize_rust::{resize_image, rotation_for};
 use image::GenericImageView;
 use num_rational::Rational32;
 use num_traits::cast::ToPrimitive;
@@ -71,13 +72,17 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         .get_object_blocking(&source)
         .expect(&format!("Could not get object: {}", &source));
 
-    let reader = image::io::Reader::new(std::io::Cursor::new(data))
+    let mut cursor = std::io::Cursor::new(data);
+    let rotate_fn = rotation_for(&mut cursor);
+    cursor.seek(SeekFrom::Start(0)).unwrap();
+    let reader = image::io::Reader::new(cursor)
         .with_guessed_format()
         .unwrap();
     let format = reader.format().unwrap();
     let img = reader
         .decode()
         .expect("Opening image failed");
+    let img = rotate_fn.map(|f| f(&img)).unwrap_or(img);
 
     let source_path_parts: Vec<&str> = source.split("/").collect();
 

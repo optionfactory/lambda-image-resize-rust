@@ -20,6 +20,7 @@ image= "*"
 clap = { version = "^2.31"}
 num-rational = "0.4.0"
 num-traits = "0.2.14"
+kamadak-exif = "0.5.4"
 
 [[bin]]
 name = "bootstrap"
