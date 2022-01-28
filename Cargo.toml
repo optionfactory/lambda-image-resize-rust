@@ -16,7 +16,7 @@ aws_lambda_events = "^0.4.0"
 rust-s3 = {version = "0.26.4", features = ["fail-on-err", "rustls-tls"]}
 aws-region = "^0.23.2"
 smartcrop= { git = "https://github.com/optionfactory/smartcrop.rs", branch = "master" }
-image= "*"
+image= {version = "*", default-features = false, features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "hdr", "dxt", "dds", "farbfeld"]} # Disable jpeg-rayon since we run single-core
 clap = { version = "^2.31"}
 num-rational = "0.4.0"
 num-traits = "0.2.14"
@@ -25,3 +25,10 @@ kamadak-exif = "0.5.4"
 [[bin]]
 name = "bootstrap"
 path = "src/main.rs"
+
+[profile.release]
+debug = 1
+panic = "unwind"
+opt-level = 3
+lto = "fat"
+codegen-units = 1

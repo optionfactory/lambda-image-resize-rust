@@ -12,7 +12,7 @@ use config::Config;
 use lambda::handler_fn;
 use serde_json::Value;
 
-use lambda_image_resize_rust::{resize_image, rotation_for};
+use lambda_image_resize_rust::{rotation_for, SmarpCropper};
 use image::GenericImageView;
 use num_rational::Rational32;
 use num_traits::cast::ToPrimitive;
@@ -96,8 +96,7 @@ fn handle_record(config: &Config, record: S3EventRecord) {
         Credentials::default().expect("Could not retrieve default credentials"),
     ).expect("Could not dest bucket");
 
-
-    let resized_images = config.sizes.iter()
+    let targets = config.sizes.iter()
         .cloned()
         .chain(config.ratios.iter()
             .cloned()
@@ -106,11 +105,15 @@ fn handle_record(config: &Config, record: S3EventRecord) {
                 let h = (Rational32::from_integer(img.height() as i32) * hr).trunc().to_u32().unwrap();
                 (folder, w, h)
             }))
-        .map(|(folder, w, h)| (folder, resize_image(&img, (w, h))));
+        .collect::<Vec<_>>();
 
-    for (folder, resized_img) in resized_images {
+    let max_w = targets.iter().map(|(_,w,_)| w).max().cloned().unwrap_or(img.width());
+    let max_h = targets.iter().map(|(_,_,h)| h).max().cloned().unwrap_or(img.height());
+    let mut smart_cropper = SmarpCropper::new(img, Some((max_w,max_h)));
+    for (folder, w, h) in targets {
+        let cropped_image = smart_cropper.crop(w, h);
         let mut buffer = Vec::new();
-        resized_img.write_to(&mut buffer, format).unwrap();
+        cropped_image.write_to(&mut buffer, format).unwrap();
 
         let mut dest_path_parts = source_path_parts.clone();
         dest_path_parts.insert(dest_path_parts.len() - 1, &folder);
