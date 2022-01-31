@@ -21,7 +21,7 @@ type Error = Box<dyn std::error::Error + Sync + Send + 'static>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    SimpleLogger::new().with_level(LevelFilter::Info).init().unwrap();
+    SimpleLogger::new().with_utc_timestamps().with_level(LevelFilter::Info).init().unwrap();
     lambda::run(handler_fn(handle_event)).await?;
     Ok(())
 }
