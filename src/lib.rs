@@ -4,6 +4,7 @@ use image::{DynamicImage, GenericImageView};
 use smartcrop::{Analyzer, CropSettings, Crop};
 use std::collections::HashMap;
 use image::imageops::FilterType;
+use log::{warn};
 
 pub struct SmarpCropper {
     analyzer: Analyzer,
@@ -53,13 +54,16 @@ impl SmarpCropper {
 
 pub fn rotation_for<R: BufRead + Seek>(container: &mut R) -> Option<fn(&DynamicImage) -> DynamicImage> {
     let exif_reader = exif::Reader::new();
-    let exif = exif_reader.read_from_container(container).unwrap();
-    exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY).and_then(|orientation: &exif::Field|
-        match orientation.value.get_uint(0) {
-            Some(8) => Some(DynamicImage::rotate270 as fn(&DynamicImage) -> DynamicImage),
-            Some(6) => Some(DynamicImage::rotate90 as fn(&DynamicImage) -> DynamicImage),
-            Some(3) => Some(DynamicImage::rotate180 as fn(&DynamicImage) -> DynamicImage),
-            Some(1) => None,
-            v => panic!("Orientation value is broken: {:?}", v),
-        })
+    if let Ok(exif) = exif_reader.read_from_container(container) {
+        exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY).and_then(|orientation: &exif::Field|
+            match orientation.value.get_uint(0) {
+                Some(8) => Some(DynamicImage::rotate270 as fn(&DynamicImage) -> DynamicImage),
+                Some(6) => Some(DynamicImage::rotate90 as fn(&DynamicImage) -> DynamicImage),
+                Some(3) => Some(DynamicImage::rotate180 as fn(&DynamicImage) -> DynamicImage),
+                Some(1) => None,
+                v => { warn!("Orientation value is broken: {:?}. Ignoring.", v); None },
+            })
+    } else {
+        None
+    }
 }
