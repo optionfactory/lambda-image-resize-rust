@@ -109,10 +109,11 @@ fn handle_record(config: &Config, record: S3EventRecord) {
             .map(dest_path)
             .collect::<Vec<_>>();
         for dest_path in dest_paths {
-            let (_, _code) = dest_bucket
+            let (_, code) = dest_bucket
                 .put_object_with_content_type_blocking(&dest_path, &data, metadata.content_type.as_ref().map(String::as_str).unwrap_or(APPLICATION_OCTET_STREAM))
                 .expect(&format!("Could not upload object to :{}", &dest_path));
-        }
+            info!("Uploaded: {} with code: {}", &dest_path, &code);
+            }
         return;
     }
     let format = format.unwrap();
